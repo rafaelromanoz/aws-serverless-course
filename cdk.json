@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts bin/curso aws serverless.ts",
+  "app": "npx ts-node --prefer-ts-exts bin/e_commerce_aws.ts",
   "watch": {
     "include": [
       "**"
