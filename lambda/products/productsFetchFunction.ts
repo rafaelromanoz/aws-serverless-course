@@ -19,6 +19,13 @@ export const handler = async (
                 })
             }
         }
+    } else if (event.resource === "/products/{id}") {
+        const productId = event.pathParameters!.id as string;
+        console.log(`GET /products/${productId}`);
+        return {
+            statusCode: 200,
+            body: `GET /products/${productId}`
+        }
     }
     return {
         statusCode: 400,
