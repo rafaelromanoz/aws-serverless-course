@@ -89,6 +89,6 @@ const sendProductEvent = (product: Product, eventType: ProductEventType, email: 
     lambdaClient.invoke({
         FunctionName: productEventsFunctionName,
         Payload: JSON.stringify(event),
-        InvocationType: "RequestResponse"
+        InvocationType: "Event"
     }).promise()
 }

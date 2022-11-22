@@ -44,12 +44,12 @@ export class ProductsAppStack extends cdk.Stack {
         // Product Events Layer
 
         const productEventsLayerArn = ssm.StringParameter.valueForStringParameter(this, "ProductEventsLayerVersionArn")
-        const productEventsLayer = lambda.LayerVersion.fromLayerVersionArn(this, "ProductEventsLayerVersionArn", productsLayerArn)
+        const productEventsLayer = lambda.LayerVersion.fromLayerVersionArn(this, "ProductEventsLayerVersionArn", productEventsLayerArn)
 
         const productEventsHandler = new lambdaNodeJS
             .NodejsFunction(this, "ProductsEventsFunction", {
             functionName: 'ProductsEventsFunction',
-            entry: "lambda/products/productsEventsFunction.ts",
+            entry: "lambda/products/productEventsFunction.ts",
             handler: "handler",
             memorySize: 128,
             timeout: cdk.Duration.seconds(2),
