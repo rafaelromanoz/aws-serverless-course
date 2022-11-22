@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
+import {EventsDdbStack} from '../lib/eventsDdb-stack';
 
 import { ProductsAppStack } from "../lib/productsApp-stack"
 import { EcommerceApiStack } from "../lib/ecommerceApi-stack";
@@ -23,7 +24,13 @@ const productsAppLayersStack = new ProductsAppLayersStack(app, "ProductsAppLayer
     env,
 });
 
+
+const eventsDdbStack = new EventsDdbStack(app, "EventsDdb", {
+    tags,
+    env
+});
 const productsAppStack = new ProductsAppStack(app, "ProductsApp", {
+    eventsDdb: eventsDdbStack.table,
     tags,
     env,
 });
