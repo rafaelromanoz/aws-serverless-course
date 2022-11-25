@@ -35,6 +35,9 @@
       ],
       "/opt/nodejs/ordersApiLayer": [
         "lambda/products/layers/ordersApiLayer/nodejs/orderApi"
+      ],
+      "/opt/nodejs/orderEventsLayer": [
+        "lambda/products/layers/orderEventsLayer/nodejs/orderEvent"
       ]
     }
   },
