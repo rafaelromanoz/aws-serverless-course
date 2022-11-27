@@ -12,6 +12,7 @@ import {
     ShippingType
 } from "./layers/ordersApiLayer/nodejs/orderApi";
 import {Envelope, OrderEvent, OrderEventType} from "./layers/orderEventsLayer/nodejs/orderEvent";
+import {v4 as uuid} from "uuid";
 
 AWSXRay.captureAWS(require("aws-sdk"));
 const ordersDdb = process.env.ORDERS_DDB!;
@@ -134,7 +135,13 @@ const sendOrderEvent = (order: Order, eventType: OrderEventType, lambdaRequestId
     }
     return snsClient.publish({
         TopicArn: orderEventsTopicArn,
-        Message: JSON.stringify(envelope)
+        Message: JSON.stringify(envelope),
+        MessageAttributes: {
+            eventType: {
+                DataType: "String",
+                StringValue: eventType
+            }
+        }
     }).promise()
 }
 
@@ -175,6 +182,8 @@ const buildOrder = (orderRequest: OrderRequest, products: Product[] ): Order => 
     })
     return {
         pk: orderRequest.email,
+        sk: uuid(),
+        createdAt: Date.now(),
         billing: {
             payment: orderRequest.payment,
             totalPrice,

@@ -26,7 +26,7 @@ export const handler = async (
         const productCreated = await productRepository.create(product);
 
         const response = await sendProductEvent(productCreated,ProductEventType.CREATED, "matilde@siecola.com.br", lambdaRequestId);
-        console.log(response);
+        console.log('RESPONSE', response);
         return {
             statusCode: 201,
             body: JSON.stringify(productCreated)
@@ -90,5 +90,5 @@ const sendProductEvent = (product: Product, eventType: ProductEventType, email: 
         FunctionName: productEventsFunctionName,
         Payload: JSON.stringify(event),
         InvocationType: "Event"
-    }).promise()
+    }).promise();
 }

@@ -10,13 +10,13 @@ const ddbClient = new DynamoDB.DocumentClient();
 
 export async function handler(event: ProductEvent, context: Context, callback: Callback): Promise<void> {
     // TODO - to be removed
-    console.log(event);
+    console.log('EVENT',event);
     console.log(`Lambda requestId: ${context.awsRequestId}`);
     await createEvent(event);
     callback(null, JSON.stringify({
         productEventCreated: true,
         message: "Ok"
-    }))
+    }));
 }
 
 const createEvent = (event: ProductEvent) => {
@@ -34,8 +34,8 @@ const createEvent = (event: ProductEvent) => {
             info: {
                 product: event.productId,
                 price: event.productPrice,
-                ttl
-            }
+            },
+            ttl
         }
     }).promise()
 }
