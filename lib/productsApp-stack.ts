@@ -12,6 +12,8 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 import * as iam from "aws-cdk-lib/aws-iam";
 
+import * as sqs from "aws-cdk-lib/aws-sqs";
+
 interface ProductsAppStackProps extends cdk.StackProps {
     eventsDdb: dynadb.Table
 }
@@ -48,8 +50,12 @@ export class ProductsAppStack extends cdk.Stack {
         const productEventsLayerArn = ssm.StringParameter
             .valueForStringParameter(this, "ProductEventsLayerVersionArn")
         const productEventsLayer = lambda
-            .LayerVersion.fromLayerVersionArn(this, "ProductEventsLayerVersionArn", productEventsLayerArn)
+            .LayerVersion.fromLayerVersionArn(this, "ProductEventsLayerVersionArn", productEventsLayerArn);
 
+        const dlq = new sqs.Queue(this, "ProductEventsDlq", {
+            queueName: "productEventsDlq",
+            retentionPeriod: cdk.Duration.days(10)
+        });
         const productEventsHandler = new lambdaNodeJS
             .NodejsFunction(this, "ProductsEventsFunction", {
             functionName: 'ProductsEventsFunction',
@@ -66,6 +72,8 @@ export class ProductsAppStack extends cdk.Stack {
             },
                 layers: [productEventsLayer],
             tracing: lambda.Tracing.ACTIVE,
+                deadLetterQueue: dlq,
+                deadLetterQueueEnabled: true,
             insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_135_0,
         });
 
