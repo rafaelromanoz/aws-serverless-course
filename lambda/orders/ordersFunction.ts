@@ -152,12 +152,12 @@ const convertToOrderResponse = (order: Order): OrderResponse => {
             code: product.code,
             price: product.price,
         })
-    })
+    });
     return <OrderResponse>{
         email: order.pk,
         id: order.sk,
         createdAt: order.createdAt!,
-        products: orderProducts,
+        products: orderProducts.length ? orderProducts : undefined,
         billing: {
             payment: order.billing.payment as PaymentType,
             totalPrice: order.billing.totalPrice,
