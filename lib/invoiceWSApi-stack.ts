@@ -13,22 +13,186 @@ export class InvoiceWSApiStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
 
-        // Invoce and invoice transaction ddb
-
+        // Invoice and invoice transaction ddb
+        const invoicesDdb = new dynamodb.Table(this, "InvoicesDdb", {
+            tableName: 'invoices',
+            billingMode: dynamodb.BillingMode.PROVISIONED,
+            readCapacity: 1,
+            writeCapacity: 1,
+            partitionKey: {
+                name: "pk",
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: "sk",
+                type: dynamodb.AttributeType.STRING,
+            },
+            timeToLiveAttribute: "ttl",
+            removalPolicy: cdk.RemovalPolicy.DESTROY
+        });
         // Invoice bucket
-
+        const bucket = new s3.Bucket(this, "InvoiceBucket", {
+           removalPolicy: cdk.RemovalPolicy.DESTROY,
+           autoDeleteObjects: true,
+            lifecycleRules: [
+                {
+                    enabled: true,
+                    expiration: cdk.Duration.days(1)
+                }
+            ]
+        });
         // Websocket connection handler
-
+        const connectionHandler = new lambdaNodeJS.NodejsFunction(this, "InvoiceConnectionFunction", {
+            functionName: 'InvoiceConnectionFunction',
+            entry: "lambda/invoices/invoiceConnectionFunction.ts",
+            handler: "handler",
+            memorySize: 128,
+            timeout: cdk.Duration.seconds(2),
+            bundling: {
+                minify: true,
+                sourceMap: false,
+            },
+            tracing: lambda.Tracing.ACTIVE,
+        });
         // websocket disconnection handler
-
+        const disconnectionHandler = new lambdaNodeJS.NodejsFunction(this, "InvoiceDisconnectionFunction", {
+            functionName: 'InvoiceDisconnectionFunction',
+            entry: "lambda/invoices/invoiceDisconnectionFunction.ts",
+            handler: "handler",
+            memorySize: 128,
+            timeout: cdk.Duration.seconds(2),
+            bundling: {
+                minify: true,
+                sourceMap: false,
+            },
+            tracing: lambda.Tracing.ACTIVE,
+        });
         // WebSocket API
-
+        const webSocketApi = new apigatewayv2.WebSocketApi(this, "InvoiceWSApi", {
+            apiName: "InvoiceWSApi",
+            connectRouteOptions: {
+                integration:
+                    new apigatewayv2_integrations
+                        .WebSocketLambdaIntegration("ConnectionHandler", connectionHandler)
+            },
+            disconnectRouteOptions: {
+                integration:
+                    new apigatewayv2_integrations
+                        .WebSocketLambdaIntegration("DisconnectionHandler", disconnectionHandler)
+            }
+        });
+        const stage = "prod";
+        const wsApiEndpoint = `${webSocketApi.apiEndpoint}/${stage}`;
+        new apigatewayv2.WebSocketStage(this, "InvoiceWSApiStage", {
+            webSocketApi,
+            stageName: stage,
+            autoDeploy: true
+        });
         // invoice url handler
-
+        const getUrlHandler = new lambdaNodeJS.NodejsFunction(this, "InvoiceGetUrlFunction", {
+            functionName: 'InvoiceGetUrlFunction',
+            entry: "lambda/invoices/invoiceGetUrlFunction.ts",
+            handler: "handler",
+            memorySize: 128,
+            timeout: cdk.Duration.seconds(2),
+            bundling: {
+                minify: true,
+                sourceMap: false,
+            },
+            tracing: lambda.Tracing.ACTIVE,
+            environment: {
+                INVOICE_DDB: invoicesDdb.tableName,
+                BUCKET_NAME: bucket.bucketName,
+                INVOICE_WSAPI_ENDPOINT: wsApiEndpoint,
+            },
+        });
+        const invoicesDdbWriteTransactionPolicy = new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ['dynamodb:PutItem'],
+            resources: [invoicesDdb.tableArn],
+            conditions: {
+                ['ForAllValues:StringLike']: {
+                    'dynamodb:LeadingKeys': ['#transaction']
+                }
+            }
+        });
+        const invoicesBucketPutObjectPolicy = new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ['s3:PutObject'],
+            resources: [`${bucket.bucketArn}/*`]
+        });
+        // Permissions get url handler
+        getUrlHandler.addToRolePolicy(invoicesBucketPutObjectPolicy);
+        getUrlHandler.addToRolePolicy(invoicesDdbWriteTransactionPolicy);
+        webSocketApi.grantManageConnections(getUrlHandler);
         // Invoice import handler
+        const invoiceImportHandler = new lambdaNodeJS.NodejsFunction(this, "InvoiceImportFunction", {
+            functionName: 'InvoiceImportFunction',
+            entry: "lambda/invoices/invoiceImportFunction.ts",
+            handler: "handler",
+            memorySize: 128,
+            timeout: cdk.Duration.seconds(2),
+            bundling: {
+                minify: true,
+                sourceMap: false,
+            },
+            tracing: lambda.Tracing.ACTIVE,
+            environment: {
+                INVOICE_DDB: invoicesDdb.tableName,
+                INVOICE_WSAPI_ENDPOINT: wsApiEndpoint,
+            },
+        });
+        invoicesDdb.grantReadWriteData(invoiceImportHandler);
 
+        bucket.addEventNotification(s3.EventType.OBJECT_CREATED_PUT,
+            new s3n.LambdaDestination(invoiceImportHandler));
+
+        const invoicesBucketGetDeleteObjectPolicy = new iam.PolicyStatement({
+           effect: iam.Effect.ALLOW,
+           actions: ['s3:DeleteObject', 's3:GetObject'],
+            resources: [`${bucket.bucketArn}/*`]
+        });
+        invoiceImportHandler.addToRolePolicy(invoicesBucketGetDeleteObjectPolicy);
+        webSocketApi.grantManageConnections(invoiceImportHandler);
         // cancel import handler
+        const cancelImportHandler = new lambdaNodeJS.NodejsFunction(this, "CancelImportFunction", {
+            functionName: 'CancelImportFunction',
+            entry: "lambda/invoices/cancelImportFunction.ts",
+            handler: "handler",
+            memorySize: 128,
+            timeout: cdk.Duration.seconds(2),
+            bundling: {
+                minify: true,
+                sourceMap: false,
+            },
+            tracing: lambda.Tracing.ACTIVE,
+            environment: {
+                INVOICE_DDB: invoicesDdb.tableName,
+                INVOICE_WSAPI_ENDPOINT: wsApiEndpoint,
+            },
+        });
+        const invoicesDdbReadWriteTransactionPolicy = new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ['dynamodb:UpdateItem', 'dynamodb:GetItem'],
+            resources: [invoicesDdb.tableArn],
+            conditions: {
+                ['ForAllValues:StringLike']: {
+                    'dynamodb:LeadingKeys': ['#transaction']
+                }
+            }
+        });
 
-        //
+        cancelImportHandler.addToRolePolicy(invoicesDdbReadWriteTransactionPolicy);
+        webSocketApi.grantManageConnections(cancelImportHandler);
+
+        // websocket api routes
+        webSocketApi.addRoute("getImportUrl", {
+            integration: new apigatewayv2_integrations
+                .WebSocketLambdaIntegration("GetUrlHandler", getUrlHandler)
+        });
+        webSocketApi.addRoute("cancelImport", {
+            integration: new apigatewayv2_integrations
+                .WebSocketLambdaIntegration("CancelImportHandler", cancelImportHandler)
+        });
     }
 }
