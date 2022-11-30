@@ -20,7 +20,7 @@ const invoiceTransactionRepository = new InvoiceTransactionRepository(ddbClient,
 const invoiceWSService = new InvoiceWSService(apigwManagementApi);
 const invoiceRepository = new InvoiceRepository(ddbClient, invoiceDdb);
 
-export const handler = async (event: S3Event, context: Context):
+export const handler = async (event: S3Event, _context: Context):
     Promise<void> => {
     console.log(event);
 
@@ -60,17 +60,24 @@ const processRecord = async (record: S3EventRecord) => {
         const invoice = JSON.parse(object.Body!.toString('utf-8')) as InvoiceFile;
         console.log("-> invoice", invoice);
 
-        await invoiceRepository.create({
-           pk: `#invoice_${invoice.customerName}`,
-            sk: invoice.invoiceNumber,
-            ttl: 0,
-            totalValue: invoice.totalValue,
-            productId: invoice.productId,
-            transactionId: key,
-            createdAt: Date.now(),
-            quantity: invoice.quantity,
-        });
-
+       await Promise.all([
+            invoiceRepository.create({
+                pk: `#invoice_${invoice.customerName}`,
+                sk: invoice.invoiceNumber,
+                ttl: 0,
+                totalValue: invoice.totalValue,
+                productId: invoice.productId,
+                transactionId: key,
+                createdAt: Date.now(),
+                quantity: invoice.quantity,
+            }),
+            s3Client.deleteObject({
+                Key: key,
+                Bucket: record.s3.bucket.name,
+            }).promise(),
+           invoiceTransactionRepository.updateInvoiceTransaction(key, InvoiceTransactionStatus.PROCESSED),
+           invoiceWSService.sendInvoiceStatus(key, invoiceTransaction.connectionId, InvoiceTransactionStatus.PROCESSED)
+        ]);
     } catch (error) {
         console.error(error);
     }
