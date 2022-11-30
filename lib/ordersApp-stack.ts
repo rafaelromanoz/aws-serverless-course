@@ -122,7 +122,7 @@ export class OrdersAppStack extends cdk.Stack {
                     'dynamodb:LeadingKeys': ['#order_*']
                 }
             }
-        })
+        });
         orderEventsHandler.addToRolePolicy(eventsDdbPolicy);
 
         const billingHandler = new lambdaNodeJS.NodejsFunction(this, "BillingFunction", {

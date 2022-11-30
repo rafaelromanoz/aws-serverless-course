@@ -43,7 +43,7 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context):
         await invoiceWSService
             .sendInvoiceStatus(transactionId, <string>connectionId, InvoiceTransactionStatus.NOT_FOUND);
     }
-
+    await invoiceWSService.disconnectClient(<string>connectionId);
     return {
         statusCode: 200,
         body: 'Ok'
