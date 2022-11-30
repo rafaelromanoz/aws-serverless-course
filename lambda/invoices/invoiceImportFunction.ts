@@ -1,6 +1,6 @@
 import * as AWSXRay from "aws-xray-sdk";
 import {Context, S3Event, S3EventRecord} from "aws-lambda";
-import {ApiGatewayManagementApi, DynamoDB, S3} from "aws-sdk";
+import {ApiGatewayManagementApi, DynamoDB, EventBridge, S3} from "aws-sdk";
 import {InvoiceTransactionRepository, InvoiceTransactionStatus} from "/opt/nodejs/invoiceTransaction";
 import {InvoiceWSService} from "/opt/nodejs/invoiceWSConnection";
 import {InvoiceFile, InvoiceRepository} from "/opt/nodejs/invoiceRepository";
@@ -9,6 +9,10 @@ AWSXRay.captureAWS(require("aws-sdk"));
 
 const invoiceDdb = process.env.INVOICE_DDB!;
 const invoicesWsApiEndpoint = process.env.INVOICE_WSAPI_ENDPOINT!.substring(6);
+
+const auditBusName = process.env.AUDIT_BUS_NAME!;
+
+const eventBridgeClient = new EventBridge();
 
 const s3Client = new S3();
 const ddbClient = new DynamoDB.DocumentClient();
@@ -80,11 +84,35 @@ const processRecord = async (record: S3EventRecord) => {
                 invoiceWSService.sendInvoiceStatus(key, invoiceTransaction.connectionId, InvoiceTransactionStatus.PROCESSED)
             ]);
         } else {
-            await invoiceWSService.disconnectClient(invoiceTransaction.connectionId);
-            throw new Error('Order number must be 5 or more caracter');
+            console.error(`Invoice import failed - non valid invoice number - TransactionId: ${key}`);
+
+            const putEventPromise = eventBridgeClient.putEvents({
+                Entries: [
+                    {
+                        Source: 'app.invoice',
+                        EventBusName: auditBusName,
+                        DetailType: 'invoice',
+                        Time: new Date(),
+                        Detail: JSON.stringify({
+                            errorDetail: 'FAIL_NO_INVOICE_NUMBER',
+                            info: {
+                                invoiceKey: key,
+                                customerName: invoice.customerName,
+                            }
+                        })
+                    }
+                ],
+            }).promise();
+
+            await Promise.all([
+                invoiceWSService.sendInvoiceStatus(key, invoiceTransaction.connectionId, InvoiceTransactionStatus.NON_VALID_INVOICE_NUMBER),
+                invoiceTransactionRepository.updateInvoiceTransaction(key, InvoiceTransactionStatus.NON_VALID_INVOICE_NUMBER),
+                putEventPromise
+            ]);
         }
+        await invoiceWSService.disconnectClient(invoiceTransaction.connectionId);
     } catch (error) {
-        console.error(error);
+        console.error((<Error>error).message);
     }
 }
 
