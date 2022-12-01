@@ -88,6 +88,7 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context): Pr
                 body: JSON.stringify(convertToOrderResponse(orderCreated))
             }
         } else {
+            console.error('Some product was not found');
             const result = await eventBridgeClient.putEvents({
                 Entries: [
                     {

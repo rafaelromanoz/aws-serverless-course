@@ -87,7 +87,6 @@ const processExpiredTransaction = async (invoiceTransactionImage: { [key: string
               errorDetail: 'TIMEOUT',
               info: {
                 transactionId,
-                
               }
             })
           }
