@@ -40,6 +40,13 @@ export class ProductsAppStack extends cdk.Stack {
             writeCapacity: 1,
         });
 
+        // Auth user info layer
+
+        const authUserInfoLayerArn = ssm.StringParameter
+            .valueForStringParameter(this, "AuthUserInfoLayerVersionArn")
+        const authUserInfoLayer = lambda
+            .LayerVersion.fromLayerVersionArn(this, "AuthUserInfoLayerVersionArn", authUserInfoLayerArn);
+
         // Product layer
 
         const productsLayerArn = ssm.StringParameter.valueForStringParameter(this, "ProductsLayerVersionArn")
@@ -125,7 +132,7 @@ export class ProductsAppStack extends cdk.Stack {
                     PRODUCTS_DDB: this.productsDbd.tableName,
                     PRODUCT_EVENTS_FUNCTION_NAME: productEventsHandler.functionName,
                 },
-                layers: [productsLayer, productEventsLayer],
+                layers: [productsLayer, productEventsLayer, authUserInfoLayer],
                 tracing: lambda.Tracing.ACTIVE,
                 insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_135_0,
             });
